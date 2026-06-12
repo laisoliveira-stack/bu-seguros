@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard MQL — BU Seguros 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f0; color: #1a1a1a; }
+.header { background: #fff; border-bottom: 0.5px solid rgba(0,0,0,0.1); padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 64px; position: sticky; top: 0; z-index: 100; }
+.header-title { font-size: 14px; font-weight: 500; color: #888; }
+.header-right { display: flex; align-items: center; gap: 12px; }
+.btn-update { display: flex; align-items: center; gap: 8px; background: #1a1a1a; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity 0.2s; }
+.btn-update:hover { opacity: 0.8; }
+.btn-update:disabled { opacity: 0.5; cursor: default; }
+.spin { display: inline-block; }
+.btn-update.loading .spin { animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.last-updated { font-size: 11px; color: #aaa; }
+.tabs { background: #fff; border-bottom: 0.5px solid rgba(0,0,0,0.1); padding: 0 2rem; display: flex; overflow-x: auto; }
+.tab { display: flex; align-items: center; gap: 10px; padding: 14px 24px; cursor: pointer; border-bottom: 2px solid transparent; font-size: 13px; font-weight: 500; color: #888; transition: all 0.2s; user-select: none; white-space: nowrap; }
+.tab:hover { color: #1a1a1a; }
+.tab.active { color: #1a1a1a; border-bottom-color: #1a1a1a; }
+.tab img { height: 22px; width: auto; object-fit: contain; opacity: 0.5; transition: opacity 0.2s; }
+.tab.active img, .tab:hover img { opacity: 1; }
+.content { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+.pane { display: none; }
+.pane.active { display: block; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+.card { background: #f7f7f4; border-radius: 8px; padding: 14px 16px; }
+.card-label { font-size: 11px; color: #888; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.03em; }
+.card-value { font-size: 22px; font-weight: 500; color: #1a1a1a; }
+.card-sub { font-size: 11px; color: #aaa; margin-top: 3px; }
+.card-compare { display: flex; align-items: center; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.tag-good { background: #e1f5ee; color: #0f6e56; font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 4px; }
+.tag-bad { background: #faece7; color: #993c1d; font-size: 11px; font-weight: 500; padding: 2px 7px; border-radius: 4px; }
+.tag-sub { font-size: 11px; color: #aaa; }
+.section { background: #fff; border: 0.5px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+.section-title { font-size: 15px; font-weight: 500; color: #1a1a1a; margin-bottom: 3px; }
+.section-sub { font-size: 12px; color: #888; margin-bottom: 1.25rem; }
+.chart-wrap { position: relative; width: 100%; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.col-title { font-size: 11px; font-weight: 500; color: #888; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+.legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 10px; font-size: 12px; color: #666; }
+.leg-dot { width: 10px; height: 10px; border-radius: 2px; display: inline-block; margin-right: 4px; vertical-align: middle; }
+.leg-line { display: inline-block; width: 20px; height: 2px; border-radius: 1px; vertical-align: middle; margin-right: 4px; }
+.painel-card { background: #f7f7f4; border-radius: 12px; padding: 24px 32px; display: inline-block; }
+.painel-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 6px; }
+.painel-value { font-size: 40px; font-weight: 500; color: #1a1a1a; }
+.painel-sub { font-size: 12px; color: #aaa; margin-top: 4px; }
+@media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } .content { padding: 1rem; } .header, .tabs { padding: 0 1rem; } }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <span class="header-title">Dashboard MQL · BU Seguros 2026</span>
+  <div class="header-right">
+    <span class="last-updated" id="lastUpdated">Dados de junho/2026</span>
+    <button class="btn-update" id="btnUpdate" onclick="fetchAndRender()">
+      <span class="spin">↻</span> Atualizar dados
+    </button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('agger')" id="tab-agger">
+    <img src="https://www.agger.com.br/wp-content/uploads/2025/01/Favicon-2-300x300.png" alt="" onerror="this.style.display='none'">
+    Agger
+  </div>
+  <div class="tab" onclick="showTab('quiver')" id="tab-quiver">
+    <img src="https://www.quiver.net.br/wp-content/uploads/2020/07/favicon-quiver.png" alt="" onerror="this.style.display='none'">
+    Quiver
+  </div>
+  <div class="tab" onclick="showTab('painel')" id="tab-painel">
+    📋 Painel do Corretor
+  </div>
+</div>
+
+<div class="content">
+  <div class="pane active" id="pane-agger">
+    <div class="section">
+      <p class="section-title">Agger — MQL mensal</p>
+      <p class="section-sub">Comparativo 2025 vs 2026</p>
+      <div class="cards">
+        <div class="card"><p class="card-label">MQL acumulado 2026</p><p class="card-value" id="a-tot">3.947</p><p class="card-sub">jan–jun</p></div>
+        <div class="card"><p class="card-label">vs mesmo período 2025</p><p class="card-value" id="a-diff">+845</p><p class="card-sub" id="a-diff-sub">jan–mai: 2.881 → 3.726</p></div>
+        <div class="card"><p class="card-label">Investimento acumulado</p><p class="card-value" id="a-inv">R$ 49,8k</p><p class="card-sub">jan–mai</p></div>
+        <div class="card"><p class="card-label">CPL médio 2026</p><p class="card-value" id="a-cpl">R$ 13,63</p><div class="card-compare"><span id="a-cpl-tag" class="tag-good">▼ R$ 0,89</span><span class="tag-sub" id="a-cpl-sub">vs R$ 14,52 (média 2025)</span></div></div>
+      </div>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:rgba(180,178,169,0.6);border:1px solid #bbb;"></span>2025</span>
+        <span><span class="leg-dot" style="background:#FBBB21;"></span>2026</span>
+      </div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="cAgger"></canvas></div>
+    </div>
+    <div class="section">
+      <p class="section-title">Agger — MQL por canal</p>
+      <p class="section-sub">Composição mensal por canal de aquisição (jan–mai 2026)</p>
+      <div class="legend" id="legA"></div>
+      <div class="two-col">
+        <div><p class="col-title">Volume por canal</p><div class="chart-wrap" style="height:300px;"><canvas id="cCanaisA"></canvas></div></div>
+        <div><p class="col-title">% de participação</p><div class="chart-wrap" style="height:300px;"><canvas id="cCanaisAPct"></canvas></div></div>
+      </div>
+    </div>
+    <div class="section">
+      <p class="section-title">Agger — CPL e volume de MQL</p>
+      <p class="section-sub">Barras: MQL mensal 2026 · Linha: CPL mensal</p>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:#FBBB21;"></span>MQL 2026</span>
+        <span><span class="leg-line" style="background:#D85A30;"></span>CPL (R$)</span>
+      </div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="cCplA"></canvas></div>
+    </div>
+    <div class="section">
+      <p class="section-title">Agger — média diária de MQL</p>
+      <p class="section-sub">Barras: MQL mensal 2026 · Linha: média de leads por dia</p>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:#FBBB21;"></span>MQL 2026</span>
+        <span><span class="leg-line" style="background:#7F77DD;"></span>Média diária</span>
+      </div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="cDiariaA"></canvas></div>
+    </div>
+  </div>
+
+  <div class="pane" id="pane-quiver">
+    <div class="section">
+      <p class="section-title">Quiver — MQL mensal</p>
+      <p class="section-sub">Comparativo 2025 vs 2026</p>
+      <div class="cards">
+        <div class="card"><p class="card-label">MQL acumulado 2026</p><p class="card-value" id="q-tot">1.091</p><p class="card-sub">jan–jun</p></div>
+        <div class="card"><p class="card-label">vs mesmo período 2025</p><p class="card-value" id="q-diff">+95</p><p class="card-sub" id="q-diff-sub">jan–mai: 927 → 1.022</p></div>
+        <div class="card"><p class="card-label">Investimento acumulado</p><p class="card-value" id="q-inv">R$ 76,1k</p><p class="card-sub">jan–mai</p></div>
+        <div class="card"><p class="card-label">CPL médio 2026</p><p class="card-value" id="q-cpl">R$ 76,58</p><div class="card-compare"><span id="q-cpl-tag" class="tag-good">▼ R$ 6,98</span><span class="tag-sub" id="q-cpl-sub">vs R$ 83,56 (média 2025)</span></div></div>
+      </div>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:rgba(180,178,169,0.6);border:1px solid #bbb;"></span>2025</span>
+        <span><span class="leg-dot" style="background:#185FA5;"></span>2026</span>
+      </div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="cQuiver"></canvas></div>
+    </div>
+    <div class="section">
+      <p class="section-title">Quiver — MQL por canal</p>
+      <p class="section-sub">Composição mensal por canal de aquisição (jan–mai 2026)</p>
+      <div class="legend" id="legQ"></div>
+      <div class="two-col">
+        <div><p class="col-title">Volume por canal</p><div class="chart-wrap" style="height:300px;"><canvas id="cCanaisQ"></canvas></div></div>
+        <div><p class="col-title">% de participação</p><div class="chart-wrap" style="height:300px;"><canvas id="cCanaisQPct"></canvas></div></div>
+      </div>
+    </div>
+    <div class="section">
+      <p class="section-title">Quiver — CPL e volume de MQL</p>
+      <p class="section-sub">Barras: MQL mensal 2026 · Linha: CPL mensal</p>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:#185FA5;"></span>MQL 2026</span>
+        <span><span class="leg-line" style="background:#D85A30;"></span>CPL (R$)</span>
+      </div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="cCplQ"></canvas></div>
+    </div>
+    <div class="section">
+      <p class="section-title">Quiver — média diária de MQL</p>
+      <p class="section-sub">Barras: MQL mensal 2026 · Linha: média de leads por dia</p>
+      <div class="legend">
+        <span><span class="leg-dot" style="background:#185FA5;"></span>MQL 2026</span>
+        <span><span class="leg-line" style="background:#7F77DD;"></span>Média diária</span>
+      </div>
+      <div class="chart-wrap" style="height:280px;"><canvas id="cDiariaQ"></canvas></div>
+    </div>
+  </div>
+
+  <div class="pane" id="pane-painel">
+    <div class="section">
+      <p class="section-title">Painel do Corretor</p>
+      <p class="section-sub">Acessos acumulados 2026</p>
+      <div class="painel-card">
+        <p class="painel-label">MQL acumulado</p>
+        <p class="painel-value" id="p-tot">6.286</p>
+        <p class="painel-sub">janeiro a abril de 2026</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== DADOS FIXOS (fallback) =====
+const FALLBACK = {
+  A: {
+    mql25:[621,472,466,611,711,625], mql26:[685,732,936,747,626,221],
+    cpl26:[14.27,12.20,10.70,13.93,17.04,null], md:[22,26,32,25,20,22], inv:49796.24,
+    canais:{'Direto':[181,210,225,221,362],'Organic Search':[274,193,280,225,89],'Referral':[61,57,43,131,214],'Mídia Paga':[114,95,117,136,33],'Desconhecido':[80,209,241,163,29],'E-mail':[55,34,84,52,26],'Org. Social':[22,21,23,9,10],'IA':[2,0,2,1,4],'Outros':[95,84,123,8,2]}
+  },
+  Q: {
+    mql25:[141,223,187,202,174,183], mql26:[162,173,241,203,243,69],
+    cpl26:[94.79,86.83,63.58,77.04,60.64,null], md:[5.2,6.2,7.8,6.8,7.8,7.7], inv:76075.29,
+    canais:{'Direto':[22,25,27,22,48],'Organic Search':[57,53,73,59,70],'Referral':[11,12,23,24,20],'Mídia Paga':[60,64,98,70,68],'Desconhecido':[1,4,3,7,10],'E-mail':[3,5,8,10,21],'Org. Social':[4,5,2,5,2],'Outros':[4,5,7,6,4]}
+  },
+  P: { mql26:[1529,1273,1799,1685,0,0] }
+};
+
+const SHEET = '2PACX-1vQsJkY_XoLPU0CTiYCDwkJjKBvRT6EhKa3enUUSIzni20R0xk46mSqNtDHK59moFjfREZ6vYHFhRLOM';
+const GID_MQL = '1005181404';
+const GID_CANAIS = '103541198';
+const CPL_A25 = 14.52, CPL_Q25 = 83.56;
+const gc = 'rgba(0,0,0,0.07)';
+const m6 = ['Jan','Fev','Mar','Abr','Mai','Jun'];
+const m5 = ['Jan','Fev','Mar','Abr','Mai'];
+const CC = ['#FBBB21','#185FA5','#0F6E56','#D85A30','#7F77DD','#1D9E75','#BA7517','#D4537E','#888780'];
+const MESES = ['JANEIRO','FEVEREIRO','MARÇO','ABRIL','MAIO','JUNHO','JULHO','AGOSTO','SETEMBRO','OUTUBRO','NOVEMBRO','DEZEMBRO'];
+let charts = {};
+
+function showTab(id) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('pane-'+id).classList.add('active');
+  document.getElementById('tab-'+id).classList.add('active');
+}
+
+function n(v) {
+  if (!v && v!==0) return null;
+  const f = parseFloat(String(v).replace(/[R$\s.]/g,'').replace(',','.'));
+  return isNaN(f) ? null : f;
+}
+function sum(arr) { return arr.reduce((a,b)=>b!=null?a+b:a,0); }
+
+function parseMQL(rows) {
+  const A={mql25:[],mql26:[],cpl26:[],md:[],inv:0};
+  const Q={mql25:[],mql26:[],cpl26:[],md:[],inv:0};
+  const P={mql26:[]};
+  let sec=null;
+  for (const row of rows) {
+    const lb=(row[0]||'').toString().toUpperCase().trim();
+    if(lb==='AGGER'){sec='A';continue;}
+    if(lb==='QUIVER'){sec='Q';continue;}
+    if(lb==='PAINEL DO CORRETOR'){sec='P';continue;}
+    const mi=MESES.indexOf(lb); if(mi<0) continue;
+    if(sec==='A'){A.mql25[mi]=n(row[1])||0;A.mql26[mi]=n(row[3])||0;const iv=n(row[4]);if(iv&&iv>0)A.inv+=iv;A.cpl26[mi]=n(row[5]);A.md[mi]=n(row[6]);}
+    else if(sec==='Q'){Q.mql25[mi]=n(row[1])||0;Q.mql26[mi]=n(row[3])||0;const iv=n(row[4]);if(iv&&iv>0)Q.inv+=iv;Q.cpl26[mi]=n(row[5]);Q.md[mi]=n(row[6]);}
+    else if(sec==='P'){P.mql26[mi]=n(row[3])||0;}
+  }
+  return {A,Q,P};
+}
+
+function parseCanais(rows) {
+  const cA={},cQ={};
+  let sec=null;
+  for (const row of rows) {
+    const lb=(row[0]||'').toString().toUpperCase().trim();
+    if(lb==='AGGER'){sec='A';continue;}
+    if(lb.startsWith('QUIVER')){sec='Q';continue;}
+    if(lb==='TIPO'||lb==='TOTAL'||!row[0]) continue;
+    const nm=row[0].toString().trim();
+    const v=[n(row[1])||0,n(row[3])||0,n(row[5])||0,n(row[7])||0,n(row[8])||0];
+    if(sec==='A') cA[nm]=v; else if(sec==='Q') cQ[nm]=v;
+  }
+  return {cA,cQ};
+}
+
+function updateCards(A,Q,P) {
+  const fmt=v=>Math.round(v).toLocaleString('pt-BR');
+  const fmtR=v=>'R$ '+v.toFixed(2).replace('.',',');
+  const a25_5=sum(A.mql25.slice(0,5)),a26_5=sum(A.mql26.slice(0,5));
+  document.getElementById('a-tot').textContent=fmt(sum(A.mql26.slice(0,6)));
+  document.getElementById('a-diff').textContent=(a26_5-a25_5>=0?'+':'')+fmt(a26_5-a25_5);
+  document.getElementById('a-diff-sub').textContent='jan–mai: '+fmt(a25_5)+' → '+fmt(a26_5);
+  document.getElementById('a-inv').textContent='R$ '+(A.inv/1000).toFixed(1)+'k';
+  const ac=A.cpl26.filter(v=>v>0),acm=ac.length?sum(ac)/ac.length:0;
+  document.getElementById('a-cpl').textContent=fmtR(acm);
+  const dA=acm-CPL_A25;
+  const aTag=document.getElementById('a-cpl-tag');
+  aTag.textContent=(dA<=0?'▼ R$ ':'▲ R$ ')+Math.abs(dA).toFixed(2).replace('.',',');
+  aTag.className=dA<=0?'tag-good':'tag-bad';
+  document.getElementById('a-cpl-sub').textContent='vs R$ '+CPL_A25.toFixed(2).replace('.',',')+' (média 2025)';
+
+  const q25_5=sum(Q.mql25.slice(0,5)),q26_5=sum(Q.mql26.slice(0,5));
+  document.getElementById('q-tot').textContent=fmt(sum(Q.mql26.slice(0,6)));
+  document.getElementById('q-diff').textContent=(q26_5-q25_5>=0?'+':'')+fmt(q26_5-q25_5);
+  document.getElementById('q-diff-sub').textContent='jan–mai: '+fmt(q25_5)+' → '+fmt(q26_5);
+  document.getElementById('q-inv').textContent='R$ '+(Q.inv/1000).toFixed(1)+'k';
+  const qc=Q.cpl26.filter(v=>v>0),qcm=qc.length?sum(qc)/qc.length:0;
+  document.getElementById('q-cpl').textContent=fmtR(qcm);
+  const dQ=qcm-CPL_Q25;
+  const qTag=document.getElementById('q-cpl-tag');
+  qTag.textContent=(dQ<=0?'▼ R$ ':'▲ R$ ')+Math.abs(dQ).toFixed(2).replace('.',',');
+  qTag.className=dQ<=0?'tag-good':'tag-bad';
+  document.getElementById('q-cpl-sub').textContent='vs R$ '+CPL_Q25.toFixed(2).replace('.',',')+' (média 2025)';
+  document.getElementById('p-tot').textContent=fmt(sum(P.mql26.slice(0,4))||6286);
+}
+
+function lblPlugin(id,mc){return{id,afterDatasetsDraw(chart){const ctx=chart.ctx;chart.data.datasets.forEach((ds,i)=>{if(ds.type==='line')return;const meta=chart.getDatasetMeta(i);if(meta.hidden)return;meta.data.forEach((bar,j)=>{const v=ds.data[j];if(!v)return;const bh=bar.height||0;if(bh<18)return;const yc=(bar.y+bar.base)/2;ctx.save();ctx.font='500 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=i===1?mc:'#666';ctx.fillText(v.toLocaleString('pt-BR'),bar.x,yc);ctx.restore();});});}};}
+function stackPlugin(id,usePct){return{id,afterDatasetsDraw(chart){const ctx=chart.ctx;chart.data.datasets.forEach((ds,i)=>{const meta=chart.getDatasetMeta(i);if(meta.hidden)return;meta.data.forEach((bar,j)=>{const v=ds.data[j];if(!v||v<(usePct?4:10))return;const bh=bar.height||0;if(bh<18)return;const yc=(bar.y+bar.base)/2;ctx.save();ctx.font='500 10px sans-serif';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(usePct?v+'%':v,bar.x,yc);ctx.restore();});});}};}
+
+function buildLegend(elId,nomes){const el=document.getElementById(elId);if(!el)return;el.innerHTML='';nomes.forEach((nm,i)=>{const s=document.createElement('span');s.innerHTML='<span class="leg-dot" style="background:'+CC[i]+';"></span>'+nm;el.appendChild(s);});}
+
+function stackDs(c,usePct){const ns=Object.keys(c);const tots=m5.map((_,j)=>ns.reduce((s,nm)=>s+(c[nm][j]||0),0));return ns.map((nm,i)=>({label:nm,backgroundColor:CC[i],stack:'stack',borderRadius:i===ns.length-1?4:0,borderSkipped:false,data:usePct?c[nm].map((v,j)=>tots[j]?Math.round(v/tots[j]*100):0):c[nm]}));}
+const sOpts=(usePct)=>({responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{stacked:true,grid:{display:false},ticks:{autoSkip:false}},y:{stacked:true,grid:{color:gc},...(usePct?{min:0,max:100,ticks:{callback:v=>v+'%'}}:{})}}});
+function mk(id){
+  // Destroy by canvas ID if a chart already exists on that canvas
+  const existing = Chart.getChart(id);
+  if(existing) existing.destroy();
+  return document.getElementById(id);
+}
+
+function buildCharts(A,Q,cA,cQ){
+  charts.ag=new Chart(mk('cAgger'),{type:'bar',plugins:[lblPlugin('lA','#1a1a1a')],data:{labels:m6,datasets:[{label:'2025',data:A.mql25.slice(0,6),backgroundColor:'rgba(180,178,169,0.45)',borderRadius:4},{label:'2026',data:A.mql26.slice(0,6),backgroundColor:'#FBBB21',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false}},y:{grid:{color:gc},ticks:{stepSize:200}}}}});
+  buildLegend('legA',Object.keys(cA));
+  charts.caA=new Chart(mk('cCanaisA'),{type:'bar',plugins:[stackPlugin('csA',false)],data:{labels:m5,datasets:stackDs(cA,false)},options:sOpts(false)});
+  charts.caAp=new Chart(mk('cCanaisAPct'),{type:'bar',plugins:[stackPlugin('csAp',true)],data:{labels:m5,datasets:stackDs(cA,true)},options:sOpts(true)});
+  charts.cplA=new Chart(mk('cCplA'),{type:'bar',data:{labels:m6,datasets:[{type:'bar',data:A.mql26.slice(0,6),backgroundColor:'#FBBB21',borderRadius:4,yAxisID:'yM',order:2},{type:'line',data:[...A.cpl26.slice(0,5),null],borderColor:'#D85A30',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#D85A30',tension:0.3,yAxisID:'yC',order:1,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false}},yM:{type:'linear',position:'left',grid:{color:gc},ticks:{stepSize:200}},yC:{type:'linear',position:'right',grid:{display:false},min:0,max:30,ticks:{callback:v=>'R$'+v.toFixed(0)}}}}});
+  charts.dA=new Chart(mk('cDiariaA'),{type:'bar',data:{labels:m6,datasets:[{type:'bar',data:A.mql26.slice(0,6),backgroundColor:'#FBBB21',borderRadius:4,yAxisID:'yM',order:2},{type:'line',data:A.md.slice(0,6),borderColor:'#7F77DD',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#7F77DD',tension:0.3,yAxisID:'yD',order:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false}},yM:{type:'linear',position:'left',grid:{color:gc},ticks:{stepSize:200}},yD:{type:'linear',position:'right',grid:{display:false},min:0,max:45,ticks:{callback:v=>v.toFixed(1)}}}}});
+  charts.qv=new Chart(mk('cQuiver'),{type:'bar',plugins:[lblPlugin('lQ','#fff')],data:{labels:m6,datasets:[{label:'2025',data:Q.mql25.slice(0,6),backgroundColor:'rgba(180,178,169,0.45)',borderRadius:4},{label:'2026',data:Q.mql26.slice(0,6),backgroundColor:'#185FA5',borderRadius:4}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false}},y:{grid:{color:gc},ticks:{stepSize:50}}}}});
+  buildLegend('legQ',Object.keys(cQ));
+  charts.caQ=new Chart(mk('cCanaisQ'),{type:'bar',plugins:[stackPlugin('csQ',false)],data:{labels:m5,datasets:stackDs(cQ,false)},options:sOpts(false)});
+  charts.caQp=new Chart(mk('cCanaisQPct'),{type:'bar',plugins:[stackPlugin('csQp',true)],data:{labels:m5,datasets:stackDs(cQ,true)},options:sOpts(true)});
+  charts.cplQ=new Chart(mk('cCplQ'),{type:'bar',data:{labels:m6,datasets:[{type:'bar',data:Q.mql26.slice(0,6),backgroundColor:'#185FA5',borderRadius:4,yAxisID:'yM',order:2},{type:'line',data:[...Q.cpl26.slice(0,5),null],borderColor:'#D85A30',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#D85A30',tension:0.3,yAxisID:'yC',order:1,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false}},yM:{type:'linear',position:'left',grid:{color:gc},ticks:{stepSize:50}},yC:{type:'linear',position:'right',grid:{display:false},min:0,max:130,ticks:{callback:v=>'R$'+v.toFixed(0)}}}}});
+  charts.dQ=new Chart(mk('cDiariaQ'),{type:'bar',data:{labels:m6,datasets:[{type:'bar',data:Q.mql26.slice(0,6),backgroundColor:'#185FA5',borderRadius:4,yAxisID:'yM',order:2},{type:'line',data:Q.md.slice(0,6),borderColor:'#7F77DD',backgroundColor:'transparent',borderWidth:2,pointRadius:4,pointBackgroundColor:'#7F77DD',tension:0.3,yAxisID:'yD',order:1}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{grid:{display:false},ticks:{autoSkip:false}},yM:{type:'linear',position:'left',grid:{color:gc},ticks:{stepSize:50}},yD:{type:'linear',position:'right',grid:{display:false},min:0,max:15,ticks:{callback:v=>v.toFixed(1)}}}}});
+}
+
+// Carrega com dados fixos imediatamente
+buildCharts(FALLBACK.A, FALLBACK.Q, FALLBACK.A.canais, FALLBACK.Q.canais);
+
+async function fetchAndRender() {
+  const btn=document.getElementById('btnUpdate');
+  btn.disabled=true; btn.classList.add('loading');
+  document.getElementById('lastUpdated').textContent='Atualizando...';
+  try {
+    const t = Date.now();
+    const fetchCSV = async (gid) => {
+      const url = 'https://docs.google.com/spreadsheets/d/e/'+SHEET+'/pub?output=csv&gid='+gid+'&t='+t;
+      const res = await fetch(url, { redirect: 'follow' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      return Papa.parse(text, { skipEmptyLines: false }).data;
+    };
+    const [mqlRows, canaisRows] = await Promise.all([
+      fetchCSV(GID_MQL),
+      fetchCSV(GID_CANAIS)
+    ]);
+    const {A,Q,P}=parseMQL(mqlRows);
+    const {cA,cQ}=parseCanais(canaisRows);
+    // merge canais fallback se vazios
+    const fA=Object.keys(cA).length?cA:FALLBACK.A.canais;
+    const fQ=Object.keys(cQ).length?cQ:FALLBACK.Q.canais;
+    updateCards(A,Q,P);
+    buildCharts(A,Q,fA,fQ);
+    const now=new Date();
+    document.getElementById('lastUpdated').textContent='Atualizado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error('Erro ao buscar dados da planilha:', e);
+    document.getElementById('lastUpdated').textContent='⚠ Erro ao atualizar — usando dados locais';
+  }
+  btn.disabled=false; btn.classList.remove('loading');
+}
+</script>
+</body>
+</html>
