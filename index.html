@@ -665,6 +665,86 @@ var FB = {
   P: { mql25:[null,null,null,null,1933,1839], mql26:[1529,1273,1799,1685,1542,701] }
 };
 
+var m5f = ['Jan','Fev','Mar','Abr','Mai'];
+
+function sumRange(arr, de, ate) {
+  var s = 0;
+  for (var i = de; i <= ate; i++) { if (arr[i]) s += arr[i]; }
+  return s;
+}
+
+function renderFunilHTML(containerId, etapas) {
+  var container = document.getElementById(containerId);
+  if (!container) return;
+  var n = etapas.length;
+  var W = 440, sliceH = 68, txH = 32;
+  var totalH = n * sliceH + (n - 1) * txH;
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + totalH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:480px;display:block;margin:0 auto;">';
+  etapas.forEach(function(e, i) {
+    var y = i * (sliceH + txH);
+    var topPct = 1 - i * (0.80 / n);
+    var botPct = 1 - (i + 1) * (0.80 / n);
+    var xTopL = (W * (1 - topPct)) / 2;
+    var xTopR = W - xTopL;
+    var xBotL = (W * (1 - botPct)) / 2;
+    var xBotR = W - xBotL;
+    var path = 'M' + xTopL.toFixed(1) + ',' + y + ' L' + xTopR.toFixed(1) + ',' + y + ' L' + xBotR.toFixed(1) + ',' + (y + sliceH) + ' L' + xBotL.toFixed(1) + ',' + (y + sliceH) + ' Z';
+    svg += '<path d="' + path + '" fill="' + e.color + '"/>';
+    var cy = y + sliceH / 2;
+    var tc = e.light ? '#1a1a1a' : '#fff';
+    svg += '<text x="' + (W/2) + '" y="' + (cy - 9) + '" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="600" fill="' + tc + '" letter-spacing="0.5">' + e.label.toUpperCase() + '</text>';
+    svg += '<text x="' + (W/2) + '" y="' + (cy + 15) + '" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="20" font-weight="500" fill="' + tc + '">' + e.val.toLocaleString('pt-BR') + '</text>';
+    if (e.tx && i < n - 1) {
+      var tyCenter = y + sliceH + txH / 2;
+      svg += '<rect x="' + (W/2 - 78) + '" y="' + (tyCenter - 11) + '" width="156" height="22" rx="11" fill="#f0f0ee"/>';
+      svg += '<text x="' + (W/2) + '" y="' + (tyCenter + 5) + '" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="500" fill="#555">↓ tx conversão: ' + e.tx + '</text>';
+    }
+  });
+  svg += '</svg>';
+  container.innerHTML = svg;
+}
+
+function updateFunilA() {
+  if (!fa) return;
+  var de = parseInt(document.getElementById('selAFunilDe').value);
+  var ate = parseInt(document.getElementById('selAFunilAte').value);
+  if (ate < de) { document.getElementById('selAFunilAte').value = de; ate = de; }
+  var users = sumRange(fa.users, de, ate);
+  var mql   = sumRange(fa.mql, de, ate);
+  var trial = sumRange(fa.trial, de, ate);
+  var vendas= sumRange(fa.vendas, de, ate);
+  var txUT  = users > 0 ? (mql/users*100).toFixed(2)+'%' : null;
+  var txMT  = mql   > 0 ? (trial/mql*100).toFixed(2)+'%' : null;
+  var txTV  = trial > 0 ? (vendas/trial*100).toFixed(2)+'%' : null;
+  renderFunilHTML('funilVisualA', [
+    { label: 'Usuários', val: users,  color: '#f0e6c8', light: true,  tx: txUT },
+    { label: 'MQL',      val: mql,    color: '#FBBB21', light: true,  tx: txMT },
+    { label: 'Trial',    val: trial,  color: '#D85A30', light: false, tx: txTV },
+    { label: 'Vendas',   val: vendas, color: '#0F6E56', light: false, tx: null }
+  ]);
+}
+
+function updateFunilQ() {
+  if (!fq) return;
+  var de = parseInt(document.getElementById('selQFunilDe').value);
+  var ate = parseInt(document.getElementById('selQFunilAte').value);
+  if (ate < de) { document.getElementById('selQFunilAte').value = de; ate = de; }
+  var users = sumRange(fq.users, de, ate);
+  var mql   = sumRange(fq.mql, de, ate);
+  var sql   = sumRange(fq.sql, de, ate);
+  var vendas= sumRange(fq.vendas, de, ate);
+  var txUT  = users > 0 ? (mql/users*100).toFixed(2)+'%' : null;
+  var txMS  = mql > 0 && sql > 0 ? (sql/mql*100).toFixed(2)+'%' : null;
+  var txSV  = sql > 0 ? (vendas/sql*100).toFixed(2)+'%' : (mql > 0 ? (vendas/mql*100).toFixed(2)+'% (MQL→Vendas)' : null);
+  var etapas = [
+    { label: 'Usuários', val: users, color: '#d0e4f5', light: true,  tx: txUT },
+    { label: 'MQL',      val: mql,   color: '#185FA5', light: false, tx: txMS }
+  ];
+  if (sql > 0) etapas.push({ label: 'SQL', val: sql, color: '#7F77DD', light: false, tx: txSV });
+  etapas.push({ label: 'Vendas', val: vendas, color: '#0F6E56', light: false, tx: null });
+  renderFunilHTML('funilVisualQ', etapas);
+}
+
 function buildAll(D) {
   var A = D.A, Q = D.Q, P = D.P;
 
@@ -759,124 +839,11 @@ function buildAll(D) {
   allCharts.qSiteSC = new Chart(mk('cQSiteSessionsCanais'), {type:'bar',plugins:[stackPlugin('csQSC',false)],data:{labels:m4,datasets:stackDs(qsite.sessionsByChannel,m4,false)},options:sOpts(false)});
   allCharts.qSiteSCp = new Chart(mk('cQSiteSessionsCanaisPct'), {type:'bar',plugins:[stackPlugin('csQSCp',true)],data:{labels:m4,datasets:stackDs(qsite.sessionsByChannel,m4,true)},options:sOpts(true)});
 
-  // === FUNIL VISUAL ===
+  // === FUNIL ===
   fa = D.A.funil;
   fq = D.Q.funil;
-  var m5f = ['Jan','Fev','Mar','Abr','Mai'];
-
-  function sumRange(arr, de, ate) {
-    var s = 0;
-    for (var i = de; i <= ate; i++) { if (arr[i]) s += arr[i]; }
-    return s;
-  }
-
-  function renderFunilHTML(containerId, etapas) {
-    var container = document.getElementById(containerId);
-    if (!container) return;
-
-    var n = etapas.length;
-    var W = 440;
-    var sliceH = 68;
-    var txH = 32; // altura para a taxa entre etapas
-    var totalH = n * sliceH + (n - 1) * txH;
-
-    var svg = '<svg viewBox="0 0 ' + W + ' ' + totalH + '" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:480px;display:block;margin:0 auto;">';
-
-    etapas.forEach(function(e, i) {
-      var y = i * (sliceH + txH);
-      // largura: topo 100% → base última 20%, distribuído linearmente
-      var topPct = 1 - i * (0.80 / n);
-      var botPct = 1 - (i + 1) * (0.80 / n);
-      var xTopL = (W * (1 - topPct)) / 2;
-      var xTopR = W - xTopL;
-      var xBotL = (W * (1 - botPct)) / 2;
-      var xBotR = W - xBotL;
-
-      // trapézio
-      var path = 'M' + xTopL.toFixed(1) + ',' + y +
-                 ' L' + xTopR.toFixed(1) + ',' + y +
-                 ' L' + xBotR.toFixed(1) + ',' + (y + sliceH) +
-                 ' L' + xBotL.toFixed(1) + ',' + (y + sliceH) + ' Z';
-      svg += '<path d="' + path + '" fill="' + e.color + '"/>';
-
-      // label etapa
-      var cy = y + sliceH / 2;
-      var textColor = e.light ? '#1a1a1a' : '#fff';
-      svg += '<text x="' + (W/2) + '" y="' + (cy - 9) + '" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="600" fill="' + textColor + '" letter-spacing="0.5">' + e.label.toUpperCase() + '</text>';
-      svg += '<text x="' + (W/2) + '" y="' + (cy + 15) + '" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="20" font-weight="500" fill="' + textColor + '">' + e.val.toLocaleString('pt-BR') + '</text>';
-
-      // taxa de conversão entre etapas (abaixo do trapézio atual)
-      if (e.tx && i < n - 1) {
-        var tyCenter = y + sliceH + txH / 2;
-        // pill de fundo
-        svg += '<rect x="' + (W/2 - 72) + '" y="' + (tyCenter - 11) + '" width="144" height="22" rx="11" fill="#f0f0ee"/>';
-        svg += '<text x="' + (W/2) + '" y="' + (tyCenter + 5) + '" text-anchor="middle" font-family="-apple-system,sans-serif" font-size="11" font-weight="500" fill="#666">↓ tx conversão: ' + e.tx + '</text>';
-      }
-    });
-
-    svg += '</svg>';
-    container.innerHTML = svg;
-  }
-
-  function updateFunilA() {
-    var de = parseInt(document.getElementById('selAFunilDe').value);
-    var ate = parseInt(document.getElementById('selAFunilAte').value);
-    if (ate < de) { document.getElementById('selAFunilAte').value = de; ate = de; }
-    var users = sumRange(fa.users, de, ate);
-    var mql   = sumRange(fa.mql, de, ate);
-    var trial = sumRange(fa.trial, de, ate);
-    var vendas= sumRange(fa.vendas, de, ate);
-    var txUT  = users > 0 ? (mql/users*100).toFixed(2)+'%' : null;
-    var txMT  = mql   > 0 ? (trial/mql*100).toFixed(2)+'%' : null;
-    var txTV  = trial > 0 ? (vendas/trial*100).toFixed(2)+'%' : null;
-    renderFunilHTML('funilVisualA', [
-      { label: 'Usuários', val: users, color: '#f0e6c8', light: true, tx: txUT },
-      { label: 'MQL',      val: mql,   color: '#FBBB21', light: true, tx: txMT },
-      { label: 'Trial',    val: trial, color: '#D85A30', light: false, tx: txTV },
-      { label: 'Vendas',   val: vendas, color: '#0F6E56', light: false, tx: null }
-    ]);
-  }
   updateFunilA();
-
-  function updateFunilQ() {
-    var de = parseInt(document.getElementById('selQFunilDe').value);
-    var ate = parseInt(document.getElementById('selQFunilAte').value);
-    if (ate < de) { document.getElementById('selQFunilAte').value = de; ate = de; }
-    var users = sumRange(fq.users, de, ate);
-    var mql   = sumRange(fq.mql, de, ate);
-    var sql   = sumRange(fq.sql, de, ate);
-    var vendas= sumRange(fq.vendas, de, ate);
-    var txUT  = users > 0 ? (mql/users*100).toFixed(2)+'%' : null;
-    var txMS  = mql   > 0 && sql > 0 ? (sql/mql*100).toFixed(2)+'%' : null;
-    var txSV  = sql   > 0 ? (vendas/sql*100).toFixed(2)+'%' : (mql > 0 ? (vendas/mql*100).toFixed(2)+'% (MQL→Vendas)' : null);
-    var etapas = [
-      { label: 'Usuários', val: users,  color: '#d0e4f5', light: true, tx: txUT },
-      { label: 'MQL',      val: mql,    color: '#185FA5', light: false, tx: txMS }
-    ];
-    if (sql > 0) etapas.push({ label: 'SQL', val: sql, color: '#7F77DD', light: false, tx: txSV });
-    etapas.push({ label: 'Vendas', val: vendas, color: '#0F6E56', light: false, tx: null });
-    renderFunilHTML('funilVisualQ', etapas);
-  }
   updateFunilQ();
-
-  // Plugin: número dentro das barras
-  var barLblPlugin = {
-    id: 'barLbl',
-    afterDatasetsDraw: function(chart) {
-      var ctx = chart.ctx;
-      chart.data.datasets.forEach(function(ds, i) {
-        var meta = chart.getDatasetMeta(i); if (meta.hidden) return;
-        meta.data.forEach(function(bar, j) {
-          var v = ds.data[j]; if (!v) return;
-          var bh = bar.height || 0; if (bh < 18) return;
-          var yc = (bar.y + bar.base) / 2;
-          ctx.save(); ctx.font = '500 10px sans-serif'; ctx.fillStyle = '#fff';
-          ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(v.toLocaleString('pt-BR'), bar.x, yc); ctx.restore();
-        });
-      });
-    }
-  };
 
   // Mensal Agger
   allCharts.funilAMensal = new Chart(mk('cFunilAMensal'), {
