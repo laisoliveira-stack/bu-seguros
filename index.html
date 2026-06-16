@@ -562,6 +562,24 @@ function invDistPlugin(id) {
   };
 }
 
+var barLblPlugin = {
+  id: 'barLbl',
+  afterDatasetsDraw: function(chart) {
+    var ctx = chart.ctx;
+    chart.data.datasets.forEach(function(ds, i) {
+      var meta = chart.getDatasetMeta(i); if (meta.hidden) return;
+      meta.data.forEach(function(bar, j) {
+        var v = ds.data[j]; if (!v) return;
+        var bh = bar.height || 0; if (bh < 18) return;
+        var yc = (bar.y + bar.base) / 2;
+        ctx.save(); ctx.font = '500 10px sans-serif'; ctx.fillStyle = '#fff';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(v.toLocaleString('pt-BR'), bar.x, yc); ctx.restore();
+      });
+    });
+  }
+};
+
 function invTotalPlugin(id) {
   return {
     id: id,
