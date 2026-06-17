@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard BU Seguros 2026</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f4f0; color: #1a1a1a; }
@@ -352,7 +353,12 @@ function showSub(brand,sub){
   document.getElementById('subtab-'+brand+'-'+sub).classList.add('active');
   setTimeout(function(){Object.values(allCharts).forEach(function(c){if(c&&c.resize)c.resize();});},50);
 }
-function mk(id){if(allCharts[id])allCharts[id].destroy();return document.getElementById(id);}
+function mk(id){
+  // Destrói pelo ID do canvas — jeito correto conforme PapaParse fix
+  const existing = Chart.getChart(id);
+  if(existing) existing.destroy();
+  return document.getElementById(id);
+}
 
 function lblPlugin(id,mc){return{id:id,afterDatasetsDraw:function(chart){var ctx=chart.ctx;chart.data.datasets.forEach(function(ds,i){if(ds.type==='line')return;var meta=chart.getDatasetMeta(i);if(meta.hidden)return;meta.data.forEach(function(bar,j){var v=ds.data[j];if(!v)return;var bh=bar.height||0;if(bh<18)return;var yc=(bar.y+bar.base)/2;ctx.save();ctx.font='500 11px sans-serif';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=i===1?mc:'#666';ctx.fillText(v.toLocaleString('pt-BR'),bar.x,yc);ctx.restore();});});}};};
 function stackPlugin(id,usePct){return{id:id,afterDatasetsDraw:function(chart){var ctx=chart.ctx;chart.data.datasets.forEach(function(ds,i){var meta=chart.getDatasetMeta(i);if(meta.hidden)return;meta.data.forEach(function(bar,j){var v=ds.data[j];if(!v||v<(usePct?4:10))return;var bh=bar.height||0;if(bh<18)return;var yc=(bar.y+bar.base)/2;ctx.save();ctx.font='500 10px sans-serif';ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(usePct?v+'%':v,bar.x,yc);ctx.restore();});});}};};
@@ -576,31 +582,31 @@ function updateCards(A,Q,P){
   document.getElementById('p-tot').textContent=fmt(sumArr(P.mql26.slice(0,6))||8529);
 }
 
-function tryFetch(){
-  var btn=document.getElementById('btnUpdate');
-  btn.disabled=true;btn.classList.add('loading');
+async function tryFetch(){
+  const btn=document.getElementById('btnUpdate');
+  btn.disabled=true; btn.classList.add('loading');
   document.getElementById('lastUpdated').textContent='Atualizando...';
-  // Padrão que funciona no GitHub Pages:
-  // fetch direto + redirect:follow + Date.now() para quebrar cache
-  var ts = '&t=' + Date.now();
-  var b1 = 'https://docs.google.com/spreadsheets/d/e/' + SHEET1 + '/pub?output=csv&gid=';
-  var b2 = 'https://docs.google.com/spreadsheets/d/e/' + SHEET2 + '/pub?output=csv&gid=';
-  var b3 = 'https://docs.google.com/spreadsheets/d/e/' + SHEET3 + '/pub?output=csv&gid=';
-  var opt = { redirect: 'follow' };
-  Promise.all([
-    fetch(b1 + GID_MQL     + ts, opt).then(function(r){ return r.text(); }),
-    fetch(b1 + GID_CANAIS  + ts, opt).then(function(r){ return r.text(); }),
-    fetch(b2 + GID_SITE_A  + ts, opt).then(function(r){ return r.text(); }),
-    fetch(b2 + GID_SITE_Q  + ts, opt).then(function(r){ return r.text(); }),
-    fetch(b3 + GID_FUNIL_A + ts, opt).then(function(r){ return r.text(); }),
-    fetch(b3 + GID_FUNIL_PDC + ts, opt).then(function(r){ return r.text(); }),
-    fetch(b3 + GID_FUNIL_Q + ts, opt).then(function(r){ return r.text(); })
-  ]).then(function(res){
-    var parseCSV=function(t){return t.split('\n').map(function(row){var result=[],current='',inQ=false;for(var i=0;i<row.length;i++){if(row[i]==='"'){inQ=!inQ;}else if(row[i]===','&&!inQ){result.push(current.trim());current='';}else{current+=row[i];}}result.push(current.trim());return result;});};
-    var mR=parseCSV(res[0]),cR=parseCSV(res[1]),sAR=parseCSV(res[2]),sQR=parseCSV(res[3]),fAR=parseCSV(res[4]),fPR=parseCSV(res[5]),fQR=parseCSV(res[6]);
+  try {
+    const t = Date.now();
+    const fetchCSV = async (sheetId, gid) => {
+      const url = 'https://docs.google.com/spreadsheets/d/e/' + sheetId + '/pub?output=csv&gid=' + gid + '&t=' + t;
+      const res = await fetch(url, { redirect: 'follow' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      return Papa.parse(text, { skipEmptyLines: false }).data;
+    };
+    const [mqlRows, canaisRows, siteAggerRows, siteQuiverRows, funilAggerRows, funilPdcRows, funilQuiverRows] = await Promise.all([
+      fetchCSV(SHEET1, GID_MQL),
+      fetchCSV(SHEET1, GID_CANAIS),
+      fetchCSV(SHEET2, GID_SITE_A),
+      fetchCSV(SHEET2, GID_SITE_Q),
+      fetchCSV(SHEET3, GID_FUNIL_A),
+      fetchCSV(SHEET3, GID_FUNIL_PDC),
+      fetchCSV(SHEET3, GID_FUNIL_Q)
+    ]);
     var A={mql25:[],mql26:[],cpl26:[],md:[],inv:0},Q={mql25:[],mql26:[],cpl26:[],md:[],inv:0},P={mql25:[],mql26:[]};
     var sec=null;
-    mR.forEach(function(row){
+    mqlRows.forEach(function(row){
       var lb=(row[0]||'').toString().toUpperCase().trim();
       if(lb==='AGGER'){sec='A';return;}if(lb==='QUIVER'){sec='Q';return;}if(lb==='PAINEL DO CORRETOR'){sec='P';return;}
       var mi=MESES.indexOf(lb);if(mi<0)return;
@@ -609,27 +615,37 @@ function tryFetch(){
       else if(sec==='P'){P.mql25[mi]=numParse(row[1])||null;P.mql26[mi]=numParse(row[3])||0;}
     });
     var cA={},cQ={},cs=null;
-    cR.forEach(function(row){
+    canaisRows.forEach(function(row){
       var lb=(row[0]||'').toString().toUpperCase().trim();
       if(lb==='AGGER'){cs='A';return;}if(lb.indexOf('QUIVER')===0){cs='Q';return;}if(lb==='TIPO'||lb==='TOTAL'||!row[0])return;
       var nm=row[0].toString().trim();
       var v=[numParse(row[1])||0,numParse(row[3])||0,numParse(row[5])||0,numParse(row[7])||0,numParse(row[8])||0,numParse(row[9])||0];
       if(cs==='A')cA[nm]=v;else if(cs==='Q')cQ[nm]=v;
     });
-    var sA=parseSite(sAR),sQ=parseSite(sQR);
-    var fA=parseFunil(fAR,'agger'),fPdc=parseFunil(fPR,'pdc'),fQ=parseFunil(fQR,'quiver');
+    var siteA=parseSite(siteAggerRows),siteQ=parseSite(siteQuiverRows);
+    var fA=parseFunil(funilAggerRows,'agger'),fPdc=parseFunil(funilPdcRows,'pdc'),fQ=parseFunil(funilQuiverRows,'quiver');
     if(fPdc.mql.length){fA.mqlPdc=fPdc.mql;fA.trialPdc=fPdc.trial;fA.vendasPdc=fPdc.vendas;}
     else{fA.mqlPdc=FB.A.funil.mqlPdc;fA.trialPdc=FB.A.funil.trialPdc;fA.vendasPdc=FB.A.funil.vendasPdc;}
     var newD={
-      A:{mql25:A.mql25,mql26:A.mql26,cpl26:A.cpl26,md:A.md,inv:A.inv,canais:Object.keys(cA).length?cA:FB.A.canais,invDist:FB.A.invDist,site:sA.users26.length?sA:FB.A.site,funil:fA.mql.length?fA:FB.A.funil},
-      Q:{mql25:Q.mql25,mql26:Q.mql26,cpl26:Q.cpl26,md:Q.md,inv:Q.inv,canais:Object.keys(cQ).length?cQ:FB.Q.canais,invDist:FB.Q.invDist,site:sQ.users26.length?sQ:FB.Q.site,funil:fQ.mql.length?fQ:FB.Q.funil},
+      A:{mql25:A.mql25,mql26:A.mql26,cpl26:A.cpl26,md:A.md,inv:A.inv,
+         canais:Object.keys(cA).length?cA:FB.A.canais,invDist:FB.A.invDist,
+         site:siteA.users26.length?siteA:FB.A.site,funil:fA.mql.length?fA:FB.A.funil},
+      Q:{mql25:Q.mql25,mql26:Q.mql26,cpl26:Q.cpl26,md:Q.md,inv:Q.inv,
+         canais:Object.keys(cQ).length?cQ:FB.Q.canais,invDist:FB.Q.invDist,
+         site:siteQ.users26.length?siteQ:FB.Q.site,funil:fQ.mql.length?fQ:FB.Q.funil},
       P:P
     };
-    updateCards(A,Q,P);buildAll(newD);
-    var now=new Date();document.getElementById('lastUpdated').textContent='Atualizado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  }).catch(function(e){console.error(e);document.getElementById('lastUpdated').textContent='Dados locais (jun/2026)';})
-  .finally(function(){btn.disabled=false;btn.classList.remove('loading');});
+    updateCards(A,Q,P);
+    buildAll(newD);
+    const now=new Date();
+    document.getElementById('lastUpdated').textContent='Atualizado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error('Erro ao buscar dados:', e);
+    document.getElementById('lastUpdated').textContent='⚠ Erro ao atualizar — usando dados locais';
+  }
+  btn.disabled=false; btn.classList.remove('loading');
 }
+
 
 function parseSite(rows){
   var s={users25:[],users26:[],sessions25:[],sessions26:[],usersByChannel:{},sessionsByChannel:{}};
